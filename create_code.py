@@ -5,9 +5,39 @@ import sys
 from tkinter import W
 
 
+def write_inherited_methods(methods, h):
+    for method in methods:
+        if method["type"].startswith("virtual"):
+            if "pure" in method and method["pure"]:
+                # required
+                optional = ""
+            else:
+                h.write("    // This is optionally overridden\n")
+                optional = "// "
+
+            if "args" in method:
+                args = ",".join([arg["type"] + " " + arg["name"]
+                                for arg in method["args"]])
+            else:
+                args = ""
+
+            h.write("        {3}{0} {1} ({2}) override;\n".format(
+                method["type"], method["name"], args, optional))
+
+
 def write_methods(methods, h):
     for method in methods:
-        h.write("        " + method["type"] + " " + method["name"] + "();\n")
+        pure = ""
+        if "pure" in method and method["pure"]:
+            pure = "= 0"
+        if "args" in method:
+            args = ",".join([arg["type"] + " " + arg["name"]
+                            for arg in method["args"]])
+        else:
+            args = ""
+
+        h.write("        {0} {1} ({2}) {3};\n".format(
+            method["type"], method["name"], args, pure))
 
 
 def write_fields(fields, h):
@@ -53,36 +83,57 @@ def create_code(config, header, source):
             # write the methods
             if "methods" in data:
                 if "public" in data["methods"]:
-                    if current_scope != "public":
+                    if current_scope != "public" and len(data["methods"]["public"]) > 0:
                         h.write("    public:\n")
+                        current_scope = "public"
                     write_methods(data["methods"]["public"], h)
+
                 if "protected" in data["methods"]:
-                    if current_scope != "protected":
+                    if current_scope != "protected" and len(data["methods"]["protected"]) > 0:
                         h.write("    protected:\n")
+                        current_scope = "protected"
                     write_methods(data["methods"]["protected"], h)
+
                 if "private" in data["methods"]:
-                    if current_scope != "private":
+                    if current_scope != "private" and len(data["methods"]["private"]) > 0:
                         h.write("    private:\n")
+                        current_scope = "private"
                     write_methods(data["methods"]["private"], h)
 
             # read in parent class pure virtual methods
-            if len(data["fields"]["public"]) > 0:
-                if current_scope != "public":
-                    h.write("    public:\n")
-                write_fields(data["fields"]["public"], h)
-                current_scope = "public"
+            if "parent" in data:
+                # let's optional the virtual functions
+                # and define the pure virtual functions
+                with open(data["parent"] + ".json", 'r') as p:
+                    parent = json.load(p)
+                    print("Yes this is derived")
+                    if "methods" in parent:
+                        if "public" in parent["methods"]:
+                            write_inherited_methods(
+                                parent["methods"]["public"], h)
+                        if "protected" in parent["methods"]:
+                            write_inherited_methods(
+                                parent["methods"]["protected"], h)
 
-            if len(data["fields"]["protected"]) > 0:
-                if current_scope != "protected":
-                    h.write("    protected:\n")
-                write_fields(data["fields"]["protected"], h)
-                current_scope = "protected"
+            # write the fields
+            if "fields" in data:
+                if "public" in data["fields"]:
+                    if current_scope != "public" and len(data["fields"]["public"]) > 0:
+                        h.write("    public:\n")
+                        current_scope = "public"
+                    write_fields(data["fields"]["public"], h)
 
-            if len(data["fields"]["private"]) > 0:
-                if current_scope != "private":
-                    h.write("    private:\n")
-                write_fields(data["fields"]["private"], h)
-                current_scope = "private"
+                if "protected" in data["fields"]:
+                    if current_scope != "protected" and len(data["fields"]["protected"]) > 0:
+                        h.write("    protected:\n")
+                        current_scope = "protected"
+                    write_fields(data["fields"]["protected"], h)
+
+                if "private" in data["fields"]:
+                    if current_scope != "private" and len(data["fields"]["private"]) > 0:
+                        h.write("    private:\n")
+                        current_scope = "private"
+                    write_fields(data["fields"]["private"], h)
 
             h.write("};\n\n")
             h.write("#endif // " + data["name"].upper() + "_H\n")
