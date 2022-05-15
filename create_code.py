@@ -5,7 +5,7 @@ import sys
 from tkinter import W
 
 
-def write_inherited_methods(methods, h):
+def write_inherited_method_declarations(methods, h):
     for method in methods:
         if method["type"].startswith("virtual"):
             if "pure" in method and method["pure"]:
@@ -23,6 +23,27 @@ def write_inherited_methods(methods, h):
 
             h.write("        {3}{0} {1} ({2}) override;\n".format(
                 method["type"], method["name"], args, optional))
+
+
+def write_inherited_method_outline(class_name, methods, cpp):
+    for method in methods:
+        if method["type"].startswith("virtual"):
+            if "pure" in method and method["pure"]:
+                # required
+                pass
+            else:
+                cpp.write("    // This is optionally overridden\n")
+
+            if "args" in method:
+                args = ",".join([arg["type"] + " " + arg["name"]
+                                for arg in method["args"]])
+            else:
+                args = ""
+
+            cpp.write("{0} {3}::{1} ({2})\n".format(
+                method["type"], method["name"], args, class_name))
+            # maybe someday the methods can have information on implementation?
+            cpp.write("{\n}\n\n")
 
 
 def write_methods(methods, h):
@@ -101,10 +122,10 @@ def create_header(data):
                 print("Yes this is derived")
                 if "methods" in parent:
                     if "public" in parent["methods"]:
-                        write_inherited_methods(
+                        write_inherited_method_declarations(
                             parent["methods"]["public"], h)
                     if "protected" in parent["methods"]:
-                        write_inherited_methods(
+                        write_inherited_method_declarations(
                             parent["methods"]["protected"], h)
 
         # write the fields
@@ -171,6 +192,21 @@ def create_source(data):
         # destructor
         c_file.write("{0}::~{0}()\n".format(data["name"]))
         c_file.write("{\n}\n\n")
+
+        # read in parent class pure virtual methods
+        if "parent" in data:
+            # let's optional the virtual functions
+            # and define the pure virtual functions
+            with open(data["parent"] + ".json", 'r') as p:
+                parent = json.load(p)
+                print("Yes this is derived")
+                if "methods" in parent:
+                    if "public" in parent["methods"]:
+                        write_inherited_method_outline(data["name"],
+                                                       parent["methods"]["public"], c_file)
+                    if "protected" in parent["methods"]:
+                        write_inherited_method_outline(data["name"],
+                                                       parent["methods"]["protected"], c_file)
 
 
 def create_code(config, header, source):
